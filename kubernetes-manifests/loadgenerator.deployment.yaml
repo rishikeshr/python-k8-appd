@@ -1,0 +1,28 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: loadgenerator
+  labels:
+    app: loadgenerator
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: loadgenerator
+  template:
+    metadata:
+      labels:
+        app: loadgenerator
+    spec:
+      containers:
+        - name: loadgenerator
+          image: rishikeshr/loadgenerator
+          env:
+          - name: FRONTEND_ADDR
+            value: "python-guestbook-frontend:80"
+          - name: USERS
+            value: "350"
+          - name: SP2WN_RATE
+            value: "30"
+          - name: RUN_TIME
+            value: "3h30m"

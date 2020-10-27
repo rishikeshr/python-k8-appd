@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: python-guestbook-frontend
+  labels:
+    app: python-guestbook
+    tier: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: python-guestbook
+      tier: frontend
+  template:
+    metadata:
+      labels:
+        app: python-guestbook
+        tier: frontend
+    spec:
+      initContainers:
+      - name: copy-appd-startup
+        image: rishikeshr/appd_python
+        command:
+        - cp
+        - -r
+        - /opt/appdynamics/.
+        - /opt/temp
+        volumeMounts:
+        - mountPath: /opt/temp
+          name: appd-agent-repo-python
+      containers:
+      - name: frontend
+        image: rishikeshr/python-guestbook-frontend
+        command: ["/bin/sh"]
+        args: ["-c", "/opt/appdynamics-python/run-with-agent.sh"]
+        ports:
+        - name: http-server
+          containerPort: 8080
+        env:
+        - name: PORT
+          value: "8080"
+        - name: GUESTBOOK_API_ADDR
+          value: python-guestbook-backend:8080
+        - name: APP_ENTRY_POINT
+          value: " python front.py"
+        resources:
+          requests:
+            cpu: 600m
+            memory: 300Mi
+          limits:
+            cpu: 800m
+            memory: 800Mi
+        volumeMounts:
+          - name: agent-config
+            mountPath: /opt/appdynamics/agent.cfg
+            subPath: agent.cfg
+          - mountPath: /opt/appdynamics-python
+            name: appd-agent-repo-python
+      nodeSelector:
+        tier-type: FrontEnd
+      volumes:
+        - name: agent-config
+          configMap:
+            name: agent-config-python-fe
+        - emptyDir: {}
+          name: appd-agent-repo-python 
+---
+apiVersion: v1
+data:
+  agent.cfg: |-
+    [agent]
+    app = guestbook
+    tier = guestbook-frontend
+    node = flask-node1
+
+    [controller]
+    host = labmachines-2081nosshc-k2qvrnml.appd-sales.com
+    port = 8090
+    ssl = off
+    account = customer1
+    accesskey = cdd4d5d3-ac1b-4101-a934-ad72fba37f31
+kind: ConfigMap
+metadata:
+  name: agent-config-python-fe

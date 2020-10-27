@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: python-guestbook-backend
+  labels:
+    app: python-guestbook
+    tier: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: python-guestbook
+      tier: backend
+  template:
+    metadata:
+      labels:
+        app: python-guestbook
+        tier: backend
+    spec:
+      initContainers:
+      - name: init-db-ready
+        image: mongo:4
+        command: ['/bin/sh', '-c']
+        args:
+          - echo "Waiting for mongodb at python-guestbook-mongodb:27017 to go live before the BE..."; 
+          - until (mongo --host python-guestbook-mongodb:27017 >/dev/null) do echo "Waiting for connection for 2 sec."; sleep 2; done
+      - name: copy-appd-startup
+        image: rishikeshr/appd_python
+        command:
+        - cp
+        - -r
+        - /opt/appdynamics/.
+        - /opt/temp
+        volumeMounts:
+        - mountPath: /opt/temp
+          name: appd-agent-repo-python
+      containers:
+        - name: backend
+          image: rishikeshr/python-guestbook-backend
+          command: ["/bin/sh"]
+          args: ["-c", "/opt/appdynamics-python/run-with-agent.sh"]
+          ports:
+          - name: http-server
+            containerPort: 8080
+          env:
+          - name: PORT
+            value: "8080"
+          - name: GUESTBOOK_DB_ADDR
+            value: "python-guestbook-mongodb:27017"
+          - name: APP_ENTRY_POINT
+            value: " python back.py"
+          volumeMounts:
+            - name: agent-config
+              mountPath: /opt/appdynamics/agent.cfg
+              subPath: agent.cfg
+            - mountPath: /opt/appdynamics-python
+              name: appd-agent-repo-python
+      volumes:
+        - name: agent-config
+          configMap:
+            name: agent-config-python-be
+        - emptyDir: {}
+          name: appd-agent-repo-python 
+---
+apiVersion: v1
+data:
+  agent.cfg: |-
+    [agent]
+    app = guestbook
+    tier = guestbook-backend
+    node = guestbook-backend
+
+    [controller]
+    host = labmachines-2081nosshc-k2qvrnml.appd-sales.com
+    port = 8090
+    ssl = off
+    account = customer1
+    accesskey = cdd4d5d3-ac1b-4101-a934-ad72fba37f31
+kind: ConfigMap
+metadata:
+  name: agent-config-python-be
